@@ -71,13 +71,17 @@ function Stop-ZoomStressLoad {
     Write-Log "Stopping all Zoom stress test instances..."
     
     # Find and stop all running Zoom stress instances
-    $ZoomProcesses = Get-Process | Where-Object { $_.ProcessName -match "^zoom\d+$" }
+    $ZoomProcesses = Get-Process | Where-Object { $_.ProcessName -match "^zoom(\d+)?$" }
     if ($ZoomProcesses) {
         $ZoomProcesses | ForEach-Object { Stop-Process -Id $_.Id -Force }
         Write-Log "All Zoom stress test instances have been stopped."
     } else {
         Write-Log "No Zoom stress test instances found."
     }
+
+    Write-Log "Awaiting the termination of a hooked process."
+    for ($i = 5; $i -gt 0; $i--) { Write-Host "$i..."; Start-Sleep -Seconds 1 }
+
 
     # Delete copied Zoom files
     Write-Log "Deleting copied zoom.exe files..."
@@ -97,6 +101,7 @@ function Stop-ZoomStressLoad {
 # Function to download Zoom installer to the same folder as the script
 function Download-Zoom {
     Write-Log "Starting Zoom download to $InstallerPath..."
+    $ProgressPreference = 'SilentlyContinue'
 
     try {
         Invoke-WebRequest -Uri $DownloadURL -OutFile $InstallerPath
