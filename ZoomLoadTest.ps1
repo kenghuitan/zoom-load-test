@@ -139,6 +139,7 @@ function Stop-ZoomStressLoad {
 # Function to download Zoom installer
 function Download-Zoom {
     Write-Log "Starting Zoom download to $InstallerPath..."
+    $ProgressPreference = 'SilentlyContinue'
 
     try {
         Invoke-WebRequest -Uri $DownloadURL -OutFile $InstallerPath
@@ -168,23 +169,66 @@ function Install-Zoom {
     }
 }
 
+# Function to uninstall Zoom silently
+function Uninstall-Zoom {
+    Write-Log "Searching for installed Zoom versions..."
+
+    # Check for Zoom in the registry
+    $ZoomRegPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    )
+
+    $ZoomEntries = @()
+    foreach ($RegPath in $ZoomRegPaths) {
+        $ZoomEntries += Get-ItemProperty -Path $RegPath -ErrorAction SilentlyContinue | 
+            Where-Object { $_.DisplayName -match "Zoom Workplace" }
+    }
+
+    if ($ZoomEntries.Count -eq 0) {
+        Write-Log "No installed versions of Zoom found."
+        return
+    }
+
+    foreach ($Entry in $ZoomEntries) {
+        Write-Log "Uninstalling Zoom version: $($Entry.DisplayName)"
+
+        if ($Entry.UninstallString) {
+            # Extract MSI product code if applicable
+            if ($Entry.UninstallString -match "MsiExec.exe /I (.+?) ") {
+                $ProductCode = $matches[1]
+                Start-Process "msiexec.exe" -ArgumentList "/x $ProductCode /quiet /norestart" -Wait
+                Write-Log "Uninstalled Zoom using MSI Product Code: $ProductCode"
+            } else {
+                # Run the uninstall string if not an MSI
+                Start-Process -FilePath $Entry.UninstallString -ArgumentList "/quiet /norestart" -Wait
+                Write-Log "Uninstalled Zoom using provided uninstall string."
+            }
+        } else {
+            Write-Log "ERROR: No uninstall string found for $($Entry.DisplayName)"
+        }
+    }
+}
+
 # Menu for user selection
 while ($true) {
     Clear-Host
     Write-Output "Zoom Management Menu"
     Write-Output "1. Download Zoom Installer"
     Write-Output "2. Install Zoom (Silent Mode)"
-    Write-Output "3. Start Zoom Stress Load"
-    Write-Output "4. Stop Zoom Stress Load"
-    Write-Output "5. Exit"
+    Write-Output "3. Uninstall Zoom (All Versions)"
+    Write-Output "4. Start Zoom Stress Load"
+    Write-Output "5. Stop Zoom Stress Load"
+    Write-Output "6. Exit"
     $Choice = Read-Host "Enter your choice (1-6)"
 
     switch ($Choice) {
         "1" { Download-Zoom }
         "2" { Install-Zoom }
-        "3" { Start-ZoomStressLoad }
-        "4" { Stop-ZoomStressLoad }
-        "5" { Write-Log "User exited the script."; exit }
+        "3" { Uninstall-Zoom }
+        "4" { Start-ZoomStressLoad }
+        "5" { Stop-ZoomStressLoad }
+        "6" { Write-Log "User exited the script."; exit }
         default { Write-Log "ERROR: Invalid choice entered ($Choice)." }
     }
 
