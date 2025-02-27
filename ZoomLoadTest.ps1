@@ -6,11 +6,12 @@
 
 # Get current script directory
 $CurrentPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-$DownloadURL = "https://zoom.us/client/latest/ZoomInstallerFull.msi?archType=x64"
-$InstallerPath = "$CurrentPath\ZoomInstaller.msi"
+$DownloadURL = "https://zoom.us/client/latest/ZoomInstaller.exe?archType=x64"
+$InstallerPath = "$CurrentPath\ZoomInstaller.exe"
 $ZoomPath = "C:\Program Files\Zoom\bin\zoom.exe"  # Update if necessary
 $ZoomDir = "C:\Program Files\Zoom\bin"  # Folder containing zoom executables
-$LogFile = "$CurrentPath\ZoomAutomation.log"  # Log file in the same directory as script
+$LogFile = "$CurrentPath\ZoomAutomation.log"
+$ConfigFile = "$CurrentPath\ZoomConfig.json"
 
 # Function to write logs with timestamps
 function Write-Log {
@@ -21,6 +22,38 @@ function Write-Log {
     Write-Output $LogEntry
 }
 
+# Function to read config file
+function Read-Config {
+    if (Test-Path $ConfigFile) {
+        return Get-Content $ConfigFile | ConvertFrom-Json
+    }
+    return $null
+}
+
+# Function to save config file
+function Save-Config {
+    param ([string]$MeetingID, [string]$MeetingCode)
+    $ConfigData = @{
+        MeetingID   = $MeetingID
+        MeetingCode = $MeetingCode
+    }
+    $ConfigData | ConvertTo-Json | Set-Content $ConfigFile
+    Write-Log "Saved Meeting ID ($MeetingID) and Code ($MeetingCode) to config file."
+}
+
+# Function to stop all running Zoom processes
+function Stop-AllZoomProcesses {
+    Write-Log "Stopping all Zoom processes..."
+    $ZoomProcesses = Get-Process | Where-Object { $_.ProcessName -match "^zoom(\d+)?$" }
+    
+    if ($ZoomProcesses) {
+        $ZoomProcesses | ForEach-Object { Stop-Process -Id $_.Id -Force }
+        Write-Log "All Zoom processes have been stopped."
+    } else {
+        Write-Log "No Zoom processes were running."
+    }
+}
+
 # Function to start Zoom stress load with CPU and memory failsafe
 function Start-ZoomStressLoad {
     if (-Not (Test-Path $ZoomPath)) {
@@ -28,10 +61,24 @@ function Start-ZoomStressLoad {
         return
     }
 
-    $MeetingID = Read-Host "Enter the Meeting ID"
-    $MeetingCode = Read-Host "Enter the Meeting Code"
-    $RunCount = Read-Host "Enter the number of times to copy and run Zoom.exe"
+    # Check for saved meeting details
+    $Config = Read-Config
+    if ($Config -and $Config.MeetingID -and $Config.MeetingCode) {
+        $UseConfig = Read-Host "Use saved meeting details? (Y/N) Meeting ID: $($Config.MeetingID), Code: $($Config.MeetingCode)"
+        if ($UseConfig -match "^[Yy]$") {
+            $MeetingID = $Config.MeetingID
+            $MeetingCode = $Config.MeetingCode
+        }
+    }
 
+    # If no saved values or user wants to enter new ones
+    if (-not $MeetingID -or -not $MeetingCode) {
+        $MeetingID = Read-Host "Enter the Meeting ID"
+        $MeetingCode = Read-Host "Enter the Meeting Code"
+        Save-Config -MeetingID $MeetingID -MeetingCode $MeetingCode
+    }
+
+    $RunCount = Read-Host "Enter the number of times to copy and run Zoom.exe"
     if ($RunCount -match '^\d+$') {
         $RunCount = [int]$RunCount  
         Write-Log "Starting Zoom stress test with $RunCount instances (Meeting ID: $MeetingID, Code: $MeetingCode)."
@@ -69,19 +116,10 @@ function Start-ZoomStressLoad {
 # Function to stop Zoom stress load and delete copied Zoom files
 function Stop-ZoomStressLoad {
     Write-Log "Stopping all Zoom stress test instances..."
-    
-    # Find and stop all running Zoom stress instances
-    $ZoomProcesses = Get-Process | Where-Object { $_.ProcessName -match "^zoom(\d+)?$" }
-    if ($ZoomProcesses) {
-        $ZoomProcesses | ForEach-Object { Stop-Process -Id $_.Id -Force }
-        Write-Log "All Zoom stress test instances have been stopped."
-    } else {
-        Write-Log "No Zoom stress test instances found."
-    }
+    Stop-AllZoomProcesses
 
     Write-Log "Awaiting the termination of a hooked process."
     for ($i = 5; $i -gt 0; $i--) { Write-Host "$i..."; Start-Sleep -Seconds 1 }
-
 
     # Delete copied Zoom files
     Write-Log "Deleting copied zoom.exe files..."
@@ -98,10 +136,9 @@ function Stop-ZoomStressLoad {
     }
 }
 
-# Function to download Zoom installer to the same folder as the script
+# Function to download Zoom installer
 function Download-Zoom {
     Write-Log "Starting Zoom download to $InstallerPath..."
-    $ProgressPreference = 'SilentlyContinue'
 
     try {
         Invoke-WebRequest -Uri $DownloadURL -OutFile $InstallerPath
@@ -113,6 +150,8 @@ function Download-Zoom {
 
 # Function to install Zoom silently
 function Install-Zoom {
+    Stop-AllZoomProcesses  # Ensure Zoom is not running before installing
+
     if (-Not (Test-Path $InstallerPath)) {
         Write-Log "Zoom installer not found. Downloading first..."
         Download-Zoom
@@ -138,7 +177,7 @@ while ($true) {
     Write-Output "3. Start Zoom Stress Load"
     Write-Output "4. Stop Zoom Stress Load"
     Write-Output "5. Exit"
-    $Choice = Read-Host "Enter your choice (1-5)"
+    $Choice = Read-Host "Enter your choice (1-6)"
 
     switch ($Choice) {
         "1" { Download-Zoom }
