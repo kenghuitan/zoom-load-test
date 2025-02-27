@@ -6,8 +6,8 @@
 
 # Get current script directory
 $CurrentPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-$DownloadURL = "https://zoom.us/client/latest/ZoomInstaller.exe?archType=x64"
-$InstallerPath = "$CurrentPath\ZoomInstaller.exe"
+$DownloadURL = "https://zoom.us/client/latest/ZoomInstallerFull.msi?archType=x64"
+$InstallerPath = "$CurrentPath\ZoomInstaller.msi"
 $ZoomPath = "C:\Program Files\Zoom\bin\zoom.exe"  # Update if necessary
 $ZoomDir = "C:\Program Files\Zoom\bin"  # Folder containing zoom executables
 $LogFile = "$CurrentPath\ZoomAutomation.log"
@@ -193,16 +193,17 @@ function Uninstall-Zoom {
     foreach ($Entry in $ZoomEntries) {
         Write-Log "Uninstalling Zoom version: $($Entry.DisplayName)"
 
+	Write-Output $Entry.UninstallString
+
         if ($Entry.UninstallString) {
+        Write-Output "Here"
             # Extract MSI product code if applicable
-            if ($Entry.UninstallString -match "MsiExec.exe /I (.+?) ") {
+            if ($Entry.UninstallString -match "/X\{(.+?)\}") {
+                Write-Output "Here2"
                 $ProductCode = $matches[1]
+		Write-Output $ProductCode
                 Start-Process "msiexec.exe" -ArgumentList "/x $ProductCode /quiet /norestart" -Wait
                 Write-Log "Uninstalled Zoom using MSI Product Code: $ProductCode"
-            } else {
-                # Run the uninstall string if not an MSI
-                Start-Process -FilePath $Entry.UninstallString -ArgumentList "/quiet /norestart" -Wait
-                Write-Log "Uninstalled Zoom using provided uninstall string."
             }
         } else {
             Write-Log "ERROR: No uninstall string found for $($Entry.DisplayName)"
