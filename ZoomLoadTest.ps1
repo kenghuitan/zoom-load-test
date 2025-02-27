@@ -1,8 +1,12 @@
 <#
-    Author  : Benjamin TAN
-    Date    : 26 Feb 2025
-    Purpose : Automate Zoom installation, stress test, and cleanup with logging and CPU/memory failsafe.
+    Author      : Benjamin TAN
+    Date        : 26 Feb 2025
+    Purpose     : Automate Zoom installation, stress test, and cleanup with logging and CPU/memory failsafe.
+    Version     : 1.0.0
+    CreatedDate : 2025-02-25
+    LastUpdated : 2025-02-27 22:14:00
 #>
+
 
 # Get current script directory
 $CurrentPath = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -12,6 +16,7 @@ $ZoomPath = "C:\Program Files\Zoom\bin\zoom.exe"  # Update if necessary
 $ZoomDir = "C:\Program Files\Zoom\bin"  # Folder containing zoom executables
 $LogFile = "$CurrentPath\ZoomAutomation.log"
 $ConfigFile = "$CurrentPath\ZoomConfig.json"
+$LastUsedNumberFile = "$CurrentPath\LastUsedNumber.txt"
 
 # Function to write logs with timestamps
 function Write-Log {
@@ -39,6 +44,19 @@ function Save-Config {
     }
     $ConfigData | ConvertTo-Json | Set-Content $ConfigFile
     Write-Log "Saved Meeting ID ($MeetingID) and Code ($MeetingCode) to config file."
+}
+
+function Get-NextInstanceNumber {
+    if (Test-Path $LastUsedNumberFile) {
+        $LastUsedNumber = Get-Content $LastUsedNumberFile
+        return [int]$LastUsedNumber + 1
+    }
+    return 1  # If file doesn't exist, start with 1
+}
+
+function Update-LastUsedNumber {
+    param ([int]$Number)
+    Set-Content -Path $LastUsedNumberFile -Value $Number
 }
 
 # Function to disable Windows Firewall for all profiles
@@ -88,25 +106,45 @@ function Start-ZoomStressLoad {
     $Config = Read-Config
     if ($Config -and $Config.MeetingID -and $Config.MeetingCode) {
         $UseConfig = Read-Host "Use saved meeting details? (Y/N) Meeting ID: $($Config.MeetingID), Code: $($Config.MeetingCode)"
+    
+        # Check if the user input is valid
         if ($UseConfig -match "^[Yy]$") {
             $MeetingID = $Config.MeetingID
             $MeetingCode = $Config.MeetingCode
+            Write-Log "Using saved meeting details."
         }
+        elseif ($UseConfig -match "^[Nn]$") {
+            Write-Log "User chose not to use saved configuration. Proceeding with manual input."
+        }
+        else {
+            Write-Log "Invalid input detected. The configuration will not be overwritten."
+            $MeetingID = $Config.MeetingID
+            $MeetingCode = $Config.MeetingCode
+        }
+    } else {
+        Write-Log "No saved meeting configuration found. Proceeding with manual input."
     }
 
-    # If no saved values or user wants to enter new ones
+    # Prompt user for new meeting details if needed
     if (-not $MeetingID -or -not $MeetingCode) {
         $MeetingID = Read-Host "Enter the Meeting ID"
         $MeetingCode = Read-Host "Enter the Meeting Code"
         Save-Config -MeetingID $MeetingID -MeetingCode $MeetingCode
+        Write-Log "Saved Meeting ID ($MeetingID) and Code ($MeetingCode) to config file."
     }
+
+    # Get the next instance number
+    $NextInstanceNumber = Get-NextInstanceNumber
+    Write-Log "Next available instance number: $NextInstanceNumber"
 
     $RunCount = Read-Host "Enter the number of times to copy and run Zoom.exe"
     if ($RunCount -match '^\d+$') {
         $RunCount = [int]$RunCount  
         Write-Log "Starting Zoom stress test with $RunCount instances (Meeting ID: $MeetingID, Code: $MeetingCode)."
 
-        for ($i = 1; $i -le $RunCount; $i++) {
+        for ($i = 0; $i -lt $RunCount; $i++) {
+            $InstanceNumber = ($NextInstanceNumber + $i).ToString("D2")
+
             # Check CPU and memory usage before launching a new instance
             $CPU_Usage = (Get-Counter '\Processor(_Total)\% Processor Time').CounterSamples.CookedValue
             $Memory_Usage = (Get-Counter '\Memory\% Committed Bytes In Use').CounterSamples.CookedValue
@@ -122,15 +160,19 @@ function Start-ZoomStressLoad {
             }
 
             # Copy zoom.exe for stress testing
-            $NewZoomPath = "$ZoomDir\zoom$i.exe"
+            $NewZoomPath = "$ZoomDir\zoom$InstanceNumber.exe"
             Copy-Item -Path $ZoomPath -Destination $NewZoomPath -Force
-            Write-Log "Copied zoom.exe to zoom$i.exe"
+            Write-Log "Copied zoom.exe to zoom$InstanceNumber.exe"
 
             # Start the copied Zoom instance with the meeting link
-            $MeetingURL = "zoommtg://zoom.us/join?action=join&uname=User$i&confno=$MeetingID&pwd=$MeetingCode&opt=join&role=0"
+            $MeetingURL = "zoommtg://zoom.us/join?action=join&uname=User$InstanceNumber&confno=$MeetingID&pwd=$MeetingCode&opt=join&role=0"
             Start-Process -FilePath $NewZoomPath -ArgumentList "--url=`"$MeetingURL`"" -NoNewWindow
-            Write-Log "Started zoom$i.exe with meeting link: $MeetingURL"
+            Write-Log "Started zoom$InstanceNumber.exe with meeting link: $MeetingURL"
         }
+
+        # Update the last used number after starting the instances
+        $LastUsedNumber = $NextInstanceNumber + $RunCount - 1
+        Update-LastUsedNumber -Number $LastUsedNumber
     } else {
         Write-Log "ERROR: Invalid input for number of instances."
     }
@@ -157,6 +199,10 @@ function Stop-ZoomStressLoad {
     } else {
         Write-Log "No copied Zoom files found."
     }
+
+    # Reset the last used instance number to 0
+    Write-Log "Resetting last used instance number to 0."
+    Update-LastUsedNumber -Number 0
 }
 
 # Function to download Zoom installer
