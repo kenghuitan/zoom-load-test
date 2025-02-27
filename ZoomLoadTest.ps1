@@ -41,6 +41,29 @@ function Save-Config {
     Write-Log "Saved Meeting ID ($MeetingID) and Code ($MeetingCode) to config file."
 }
 
+# Function to disable Windows Firewall for all profiles
+function Disable-Firewall {
+    Write-Output "Disabling Windows Firewall..."
+
+    # Disable firewall for all profiles
+    Set-NetFirewallProfile -Profile Domain,Private,Public -Enabled False
+
+    Write-Output "Windows Firewall has been disabled."
+    Write-Log "Windows Firewall has been disabled."
+}
+
+# Function to enable Windows Firewall for all profiles
+function Enable-Firewall {
+    Write-Output "Enabling Windows Firewall..."
+
+    # Enable firewall for all profiles
+    Set-NetFirewallProfile -Profile Domain,Private,Public -Enabled True
+
+    Write-Output "Windows Firewall has been enabled."
+    Write-Log "Windows Firewall has been enabled."
+
+}
+
 # Function to stop all running Zoom processes
 function Stop-AllZoomProcesses {
     Write-Log "Stopping all Zoom processes..."
@@ -215,18 +238,22 @@ while ($true) {
     Write-Output "1. Download Zoom Installer"
     Write-Output "2. Install Zoom (Silent Mode)"
     Write-Output "3. Uninstall Zoom (All Versions)"
-    Write-Output "4. Start Zoom Stress Load"
-    Write-Output "5. Stop Zoom Stress Load"
-    Write-Output "6. Exit"
+    Write-Output "4. Disable Firewall"
+    Write-Output "5. Enable Firewall"
+    Write-Output "6. Start Zoom Stress Load"
+    Write-Output "7. Stop Zoom Stress Load"
+    Write-Output "8. Exit"
     $Choice = Read-Host "Enter your choice (1-6)"
 
     switch ($Choice) {
         "1" { Download-Zoom }
         "2" { Install-Zoom }
         "3" { Uninstall-Zoom }
-        "4" { Start-ZoomStressLoad }
-        "5" { Stop-ZoomStressLoad }
-        "6" { Write-Log "User exited the script."; exit }
+        "4" { Disable-Firewall }
+        "5" { Enable-Firewall }
+        "6" { Start-ZoomStressLoad }
+        "7" { Stop-ZoomStressLoad }
+        "8" { Write-Log "User exited the script."; exit }
         default { Write-Log "ERROR: Invalid choice entered ($Choice)." }
     }
 
