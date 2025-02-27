@@ -196,12 +196,9 @@ function Uninstall-Zoom {
 	Write-Output $Entry.UninstallString
 
         if ($Entry.UninstallString) {
-        Write-Output "Here"
             # Extract MSI product code if applicable
             if ($Entry.UninstallString -match "/X\{(.+?)\}") {
-                Write-Output "Here2"
-                $ProductCode = $matches[1]
-		Write-Output $ProductCode
+                $ProductCode = "{$($matches[1])}"
                 Start-Process "msiexec.exe" -ArgumentList "/x $ProductCode /quiet /norestart" -Wait
                 Write-Log "Uninstalled Zoom using MSI Product Code: $ProductCode"
             }
