@@ -104,7 +104,7 @@ function Start-ZoomStressLoad {
 
     # Check for saved meeting details
     $Config = Read-Config
-    if ($Config -and $Config.MeetingID -and $Config.MeetingCode) {
+    if ($Config -and $Config.MeetingID) {
         $UseConfig = Read-Host "Use saved meeting details? (Y/N) Meeting ID: $($Config.MeetingID), Code: $($Config.MeetingCode)"
     
         # Check if the user input is valid
@@ -126,7 +126,7 @@ function Start-ZoomStressLoad {
     }
 
     # Prompt user for new meeting details if needed
-    if (-not $MeetingID -or -not $MeetingCode) {
+    if (-not $MeetingID) {
         $MeetingID = Read-Host "Enter the Meeting ID"
         $MeetingCode = Read-Host "Enter the Meeting Code"
         Save-Config -MeetingID $MeetingID -MeetingCode $MeetingCode
@@ -289,7 +289,7 @@ while ($true) {
     Write-Output "6. Start Zoom Stress Load"
     Write-Output "7. Stop Zoom Stress Load"
     Write-Output "8. Exit"
-    $Choice = Read-Host "Enter your choice (1-6)"
+    $Choice = Read-Host "Enter your choice (1-8)"
 
     switch ($Choice) {
         "1" { Download-Zoom }
@@ -299,7 +299,7 @@ while ($true) {
         "5" { Enable-Firewall }
         "6" { Start-ZoomStressLoad }
         "7" { Stop-ZoomStressLoad }
-        "8" { Write-Log "User exited the script."; exit }
+        "8" { Stop-ZoomStressLoad; Write-Log "User exited the script."; exit }
         default { Write-Log "ERROR: Invalid choice entered ($Choice)." }
     }
 
