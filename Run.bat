@@ -1,0 +1,1 @@
+powershell.exe Set-ExecutionPolicy Unrestricted -Scope CurrentUser
